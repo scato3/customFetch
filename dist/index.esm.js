@@ -6399,7 +6399,7 @@ var jsonwebtoken = {
   TokenExpiredError: TokenExpiredError_1,
 };
 
-/* hs-fetch ver 1.05 */
+/* hs-fetch ver 1.06 */
 var Api = /** @class */function () {
   function Api(config) {
     var _this = this;
