@@ -1,6 +1,6 @@
-interface FetchOptions {
+interface FetchOptions<T = unknown> {
     method?: string;
-    body?: unknown;
+    body?: T;
     query?: Record<string, unknown>;
     url: string;
     headers?: Record<string, string>;
@@ -15,14 +15,17 @@ interface ApiConfig {
 }
 declare class Api {
     private config;
+    private isRefreshingToken;
+    private tokenRefreshQueue;
     constructor(config: Partial<ApiConfig>);
     isTokenExpired(token: string): boolean;
+    private handleTokenRefresh;
     private fetchInternal;
-    get: (options: FetchOptions) => Promise<any>;
-    post: (options: FetchOptions) => Promise<any>;
-    put: (options: FetchOptions) => Promise<any>;
-    patch: (options: FetchOptions) => Promise<any>;
-    delete: (options: FetchOptions) => Promise<any>;
+    get: <T = unknown>(options: FetchOptions<T>) => Promise<any>;
+    post: <T = unknown>(options: FetchOptions<T>) => Promise<any>;
+    put: <T = unknown>(options: FetchOptions<T>) => Promise<any>;
+    patch: <T = unknown>(options: FetchOptions<T>) => Promise<any>;
+    delete: <T = unknown>(options: FetchOptions<T>) => Promise<any>;
     getConfig(): ApiConfig;
     updateConfig(config: Partial<ApiConfig>): void;
 }

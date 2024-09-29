@@ -1,4 +1,4 @@
-/* hs-fetch ver 1.03 */
+/* hs-fetch ver 1.05 */
 
 import queryString from "query-string";
 import jwt from "jsonwebtoken";
@@ -12,9 +12,9 @@ interface NextFetchOptions {
   tags?: string[];
 }
 
-interface FetchOptions {
+interface FetchOptions<T = unknown> {
   method?: string;
-  body?: unknown;
+  body?: T;
   query?: Record<string, unknown>;
   url: string;
   headers?: Record<string, string>;
@@ -31,6 +31,8 @@ interface ApiConfig {
 
 class Api {
   private config: ApiConfig;
+  private isRefreshingToken = false; // Tracks if token is being refreshed
+  private tokenRefreshQueue: (() => void)[] = []; // Queue to handle pending requests during token refresh
 
   constructor(config: Partial<ApiConfig>) {
     // Merging default configuration with provided configuration
@@ -53,8 +55,34 @@ class Api {
     }
   }
 
+  // Token refresh logic with queue handling
+  private async handleTokenRefresh(): Promise<void> {
+    if (this.isRefreshingToken) {
+      // If token is already being refreshed, push request to the queue
+      return new Promise<void>((resolve) => {
+        this.tokenRefreshQueue.push(resolve);
+      });
+    }
+
+    this.isRefreshingToken = true;
+
+    try {
+      // Attempt to refresh token
+      await this.config.onRefreshToken?.();
+    } finally {
+      // Once token is refreshed, resolve all pending requests in the queue
+      this.isRefreshingToken = false;
+      while (this.tokenRefreshQueue.length) {
+        const resolve = this.tokenRefreshQueue.shift();
+        resolve?.();
+      }
+    }
+  }
+
   // Internal fetch method to handle API requests
-  private async fetchInternal(options: FetchOptions) {
+  private async fetchInternal<T = unknown>(
+    options: FetchOptions<T>
+  ): Promise<any> {
     const {
       body,
       method = "GET",
@@ -74,8 +102,8 @@ class Api {
     let token = this.config.getToken ? this.config.getToken() : null;
 
     // If the token is expired, refresh it using onRefreshToken
-    if (token && this.isTokenExpired(token) && this.config.onRefreshToken) {
-      await this.config.onRefreshToken();
+    if (token && this.isTokenExpired(token)) {
+      await this.handleTokenRefresh(); // Wait for token refresh
       token = this.config.getToken ? this.config.getToken() : null;
     }
 
@@ -117,7 +145,10 @@ class Api {
 
     // Append query parameters to the URL if provided
     const finalUrl = query
-      ? `${fullUrl}?${queryString.stringify(query)}`
+      ? `${fullUrl}?${queryString.stringify(query, {
+          skipNull: true, // Skip null values
+          skipEmptyString: true, // Skip empty string values
+        })}`
       : fullUrl;
 
     // Perform the fetch request
@@ -139,15 +170,15 @@ class Api {
   }
 
   // Shorthand methods for different HTTP verbs
-  get = (options: FetchOptions) =>
+  get = <T = unknown>(options: FetchOptions<T>) =>
     this.fetchInternal({ method: "GET", ...options });
-  post = (options: FetchOptions) =>
+  post = <T = unknown>(options: FetchOptions<T>) =>
     this.fetchInternal({ method: "POST", ...options });
-  put = (options: FetchOptions) =>
+  put = <T = unknown>(options: FetchOptions<T>) =>
     this.fetchInternal({ method: "PUT", ...options });
-  patch = (options: FetchOptions) =>
+  patch = <T = unknown>(options: FetchOptions<T>) =>
     this.fetchInternal({ method: "PATCH", ...options });
-  delete = (options: FetchOptions) =>
+  delete = <T = unknown>(options: FetchOptions<T>) =>
     this.fetchInternal({ method: "DELETE", ...options });
 
   // Retrieve the current configuration

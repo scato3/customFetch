@@ -6399,10 +6399,12 @@ var jsonwebtoken = {
   TokenExpiredError: TokenExpiredError_1,
 };
 
-/* hs-fetch ver 1.03 */
+/* hs-fetch ver 1.05 */
 var Api = /** @class */function () {
   function Api(config) {
     var _this = this;
+    this.isRefreshingToken = false; // Tracks if token is being refreshed
+    this.tokenRefreshQueue = []; // Queue to handle pending requests during token refresh
     // Shorthand methods for different HTTP verbs
     this.get = function (options) {
       return _this.fetchInternal(__assign({
@@ -6454,6 +6456,45 @@ var Api = /** @class */function () {
       return true;
     }
   };
+  // Token refresh logic with queue handling
+  Api.prototype.handleTokenRefresh = function () {
+    var _a, _b;
+    return __awaiter(this, void 0, void 0, function () {
+      var resolve;
+      var _this = this;
+      return __generator(this, function (_c) {
+        switch (_c.label) {
+          case 0:
+            if (this.isRefreshingToken) {
+              // If token is already being refreshed, push request to the queue
+              return [2 /*return*/, new Promise(function (resolve) {
+                _this.tokenRefreshQueue.push(resolve);
+              })];
+            }
+            this.isRefreshingToken = true;
+            _c.label = 1;
+          case 1:
+            _c.trys.push([1,, 3, 4]);
+            // Attempt to refresh token
+            return [4 /*yield*/, (_b = (_a = this.config).onRefreshToken) === null || _b === void 0 ? void 0 : _b.call(_a)];
+          case 2:
+            // Attempt to refresh token
+            _c.sent();
+            return [3 /*break*/, 4];
+          case 3:
+            // Once token is refreshed, resolve all pending requests in the queue
+            this.isRefreshingToken = false;
+            while (this.tokenRefreshQueue.length) {
+              resolve = this.tokenRefreshQueue.shift();
+              resolve === null || resolve === void 0 ? void 0 : resolve();
+            }
+            return [7 /*endfinally*/];
+          case 4:
+            return [2 /*return*/];
+        }
+      });
+    });
+  };
   // Internal fetch method to handle API requests
   Api.prototype.fetchInternal = function (options) {
     var _a;
@@ -6465,10 +6506,10 @@ var Api = /** @class */function () {
             body = options.body, _b = options.method, method = _b === void 0 ? "GET" : _b, query = options.query, url = options.url, _c = options.headers, headers = _c === void 0 ? {} : _c, revalidate = options.revalidate, tags = options.tags;
             fullUrl = url.startsWith("http") ? url : "".concat(this.config.baseUrl.replace(/\/$/, ""), "/").concat(url.replace(/^\//, ""));
             token = this.config.getToken ? this.config.getToken() : null;
-            if (!(token && this.isTokenExpired(token) && this.config.onRefreshToken)) return [3 /*break*/, 2];
-            return [4 /*yield*/, this.config.onRefreshToken()];
+            if (!(token && this.isTokenExpired(token))) return [3 /*break*/, 2];
+            return [4 /*yield*/, this.handleTokenRefresh()];
           case 1:
-            _d.sent();
+            _d.sent(); // Wait for token refresh
             token = this.config.getToken ? this.config.getToken() : null;
             _d.label = 2;
           case 2:
@@ -6493,7 +6534,10 @@ var Api = /** @class */function () {
               headers: requestHeaders,
               body: body ? JSON.stringify(body) : undefined
             }, nextFetchOptions);
-            finalUrl = query ? "".concat(fullUrl, "?").concat(queryString.stringify(query)) : fullUrl;
+            finalUrl = query ? "".concat(fullUrl, "?").concat(queryString.stringify(query, {
+              skipNull: true,
+              skipEmptyString: true // Skip empty string values
+            })) : fullUrl;
             return [4 /*yield*/, fetch(finalUrl, requestOptions)];
           case 3:
             res = _d.sent();
