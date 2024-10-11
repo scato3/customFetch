@@ -32,7 +32,10 @@ interface ApiConfig {
 class Api {
   private config: ApiConfig;
   private isRefreshingToken = false; // Tracks if token is being refreshed
-  private tokenRefreshQueue: (() => void)[] = []; // Queue to handle pending requests during token refresh
+  private tokenRefreshQueue: {
+    resolve: () => void;
+    reject: (reason?: any) => void;
+  }[] = []; // Queue to handle pending requests during token refresh
 
   constructor(config: Partial<ApiConfig>) {
     // Merging default configuration with provided configuration
@@ -58,22 +61,27 @@ class Api {
   // Token refresh logic with queue handling
   private async handleTokenRefresh(): Promise<void> {
     if (this.isRefreshingToken) {
-      // If token is already being refreshed, push request to the queue
-      return new Promise<void>((resolve) => {
-        this.tokenRefreshQueue.push(resolve);
+      return new Promise<void>((resolve, reject) => {
+        this.tokenRefreshQueue.push({ resolve, reject });
       });
     }
 
     this.isRefreshingToken = true;
 
     try {
-      // Attempt to refresh token
       await this.config.onRefreshToken?.();
-    } finally {
-      // Once token is refreshed, resolve all pending requests in the queue
-      this.isRefreshingToken = false;
+    } catch (error) {
+      // If refreshing fails, reject all pending promises
       while (this.tokenRefreshQueue.length) {
-        const resolve = this.tokenRefreshQueue.shift();
+        const { reject } = this.tokenRefreshQueue.shift()!;
+        reject?.(error);
+      }
+      throw error; // Rethrow the error if needed
+    } finally {
+      this.isRefreshingToken = false;
+      // Resolve all pending promises if token refresh succeeded
+      while (this.tokenRefreshQueue.length) {
+        const { resolve } = this.tokenRefreshQueue.shift()!;
         resolve?.();
       }
     }
