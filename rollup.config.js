@@ -2,32 +2,37 @@ import resolve from "@rollup/plugin-node-resolve";
 import commonjs from "@rollup/plugin-commonjs";
 import typescript from "@rollup/plugin-typescript";
 import { babel } from "@rollup/plugin-babel";
+import { terser } from "rollup-plugin-terser";
 
 export default {
-  input: "src/index.ts", // 진입점 파일
+  input: "src/index.ts",
   output: [
     {
       file: "dist/index.cjs.js",
-      format: "cjs", // CommonJS 포맷
+      format: "cjs",
       sourcemap: true,
     },
     {
       file: "dist/index.esm.js",
-      format: "esm", // ES Module 포맷
+      format: "esm",
       sourcemap: true,
     },
   ],
   plugins: [
-    resolve(), // node_modules 패키지들을 가져옴
-    commonjs(), // CommonJS 모듈들을 변환
-    typescript({ tsconfig: "./tsconfig.json" }), // TypeScript 지원
+    resolve(),
+    commonjs(),
+    typescript({
+      tsconfig: "./tsconfig.json",
+      declaration: true,
+    }),
     babel({
       babelHelpers: "bundled",
       presets: [
         ["@babel/preset-env", { targets: "> 0.25%, not dead", modules: false }],
       ],
-      extensions: [".js", ".ts"], // Babel이 처리할 파일 확장자
-      exclude: "node_modules/**", // node_modules 제외
+      extensions: [".js", ".ts"],
+      exclude: "node_modules/**",
     }),
+    terser(),
   ],
 };

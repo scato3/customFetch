@@ -1,17 +1,20 @@
-/* hs-fetch ver 1.07 */
+/* hs-fetch ver 1.08 */
 
 import queryString from "query-string";
 import jwt from "jsonwebtoken";
 
+// Interface for decoding token
 interface DecodedToken {
   exp: number;
 }
 
+// Interface for Next.js-specific fetch options
 interface NextFetchOptions {
   revalidate?: number;
   tags?: string[];
 }
 
+// Main fetch options interface
 interface FetchOptions<T = unknown> {
   method?: string;
   body?: T;
@@ -20,15 +23,26 @@ interface FetchOptions<T = unknown> {
   headers?: Record<string, string>;
   revalidate?: number;
   tags?: string[];
+  retryCount?: number; // Retry count; default is 3 times
+  retryDelay?: number; // Delay between retries in milliseconds
+  timeout?: number; // Request timeout in milliseconds
+  onSuccess?: (data: T) => void;
+  onError?: (error: Error) => void;
+  beforeRequest?: (url: string, options: RequestInit) => void; // Hook before request
+  afterResponse?: (response: Response) => void; // Hook after response
+  useToken?: boolean; // Whether to use token (default true)
 }
 
+// Interface for API configuration
 interface ApiConfig {
   baseUrl: string;
   getToken?: () => string | null;
   onRefreshToken?: () => Promise<void>;
+  onRefreshTokenFailed?: () => void;
   authorizationType?: "Bearer" | "Basic" | string | null;
 }
 
+// API class for handling requests and token management
 class Api {
   private config: ApiConfig;
   private isRefreshingToken = false; // Tracks if token is being refreshed
@@ -38,17 +52,17 @@ class Api {
   }[] = []; // Queue to handle pending requests during token refresh
 
   constructor(config: Partial<ApiConfig>) {
-    // Merging default configuration with provided configuration
     this.config = {
       baseUrl: "",
       getToken: () => null,
       onRefreshToken: async () => {},
+      onRefreshTokenFailed: () => {},
       authorizationType: "Bearer",
       ...config,
     };
   }
 
-  // Check if the provided token is expired
+  // Method to check if the token is expired
   isTokenExpired(token: string): boolean {
     try {
       const decoded = jwt.decode(token) as DecodedToken | null;
@@ -58,7 +72,7 @@ class Api {
     }
   }
 
-  // Token refresh logic with queue handling
+  // Method for handling token refresh with a queue system
   private async handleTokenRefresh(): Promise<void> {
     if (this.isRefreshingToken) {
       return new Promise<void>((resolve, reject) => {
@@ -71,15 +85,13 @@ class Api {
     try {
       await this.config.onRefreshToken?.();
     } catch (error) {
-      // If refreshing fails, reject all pending promises
       while (this.tokenRefreshQueue.length) {
         const { reject } = this.tokenRefreshQueue.shift()!;
         reject?.(error);
       }
-      throw error; // Rethrow the error if needed
+      throw error;
     } finally {
       this.isRefreshingToken = false;
-      // Resolve all pending promises if token refresh succeeded
       while (this.tokenRefreshQueue.length) {
         const { resolve } = this.tokenRefreshQueue.shift()!;
         resolve?.();
@@ -87,7 +99,29 @@ class Api {
     }
   }
 
-  // Internal fetch method to handle API requests
+  // Internal method to create request headers
+  private createHeaders(
+    token: string | null,
+    headers: Record<string, string>,
+    useToken: boolean
+  ): HeadersInit {
+    const authorizationHeader: Record<string, string> =
+      useToken && token
+        ? {
+            Authorization: this.config.authorizationType
+              ? `${this.config.authorizationType} ${token}`
+              : token,
+          }
+        : {};
+
+    return {
+      "Content-Type": "application/json",
+      ...authorizationHeader,
+      ...headers,
+    };
+  }
+
+  // Internal method to handle fetch requests with retry and timeout logic
   private async fetchInternal<T = unknown>(
     options: FetchOptions<T>
   ): Promise<any> {
@@ -99,39 +133,39 @@ class Api {
       headers = {},
       revalidate,
       tags,
+      retryCount = 3,
+      retryDelay = 1000,
+      timeout = 5000,
+      onSuccess,
+      onError,
+      beforeRequest,
+      afterResponse,
+      useToken = true, // Default to using token
     } = options;
 
-    // Build the full URL, combining baseUrl with the given endpoint
     const fullUrl = url.startsWith("http")
       ? url
       : `${this.config.baseUrl.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
 
-    // Retrieve the token using getToken function
-    let token = this.config.getToken ? this.config.getToken() : null;
+    let token = null;
+    if (useToken && this.config.getToken) {
+      token = this.config.getToken();
 
-    // If the token is expired, refresh it using onRefreshToken
-    if (token && this.isTokenExpired(token)) {
-      await this.handleTokenRefresh(); // Wait for token refresh
-      token = this.config.getToken ? this.config.getToken() : null;
+      if (token && this.isTokenExpired(token)) {
+        try {
+          await this.handleTokenRefresh();
+          token = this.config.getToken();
+        } catch (refreshError) {
+          if (onError && refreshError instanceof Error) {
+            onError(refreshError);
+          }
+          throw refreshError;
+        }
+      }
     }
 
-    // Set the authorization header if the token exists
-    const authorizationHeader: Record<string, string> = token
-      ? {
-          Authorization: this.config.authorizationType
-            ? `${this.config.authorizationType} ${token}`
-            : token,
-        }
-      : {};
+    const requestHeaders = this.createHeaders(token, headers, useToken);
 
-    // Merge default headers with provided headers
-    const requestHeaders: HeadersInit = {
-      "Content-Type": "application/json",
-      ...authorizationHeader,
-      ...headers,
-    };
-
-    // Handle Next.js-specific fetch options (revalidation, tags)
     const nextFetchOptions: Partial<{ next: NextFetchOptions }> = {};
     if (revalidate || tags) {
       nextFetchOptions.next = {};
@@ -143,58 +177,88 @@ class Api {
       }
     }
 
-    // Build the request options
     const requestOptions: RequestInit = {
       method,
       headers: requestHeaders,
-      body: body ? JSON.stringify(body) : undefined, // Remove body if it is undefined
-      ...nextFetchOptions, // Add Next.js fetch options
+      body: body ? JSON.stringify(body) : undefined,
+      ...nextFetchOptions,
     };
 
-    // Append query parameters to the URL if provided
     const finalUrl = query
       ? `${fullUrl}?${queryString.stringify(query, {
-          skipNull: true, // Skip null values
-          skipEmptyString: true, // Skip empty string values
+          skipNull: true,
+          skipEmptyString: true,
         })}`
       : fullUrl;
 
-    // Perform the fetch request
-    const res = await fetch(
-      finalUrl,
-      requestOptions as RequestInit & { next?: NextFetchOptions }
-    );
-
-    // Handle non-OK responses
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.message || "Request failed");
+    if (beforeRequest) {
+      beforeRequest(finalUrl, requestOptions);
     }
 
-    // Return the response, parsed as JSON if applicable, otherwise as text
-    return res.headers.get("Content-Type")?.includes("application/json")
-      ? res.json()
-      : res.text();
+    for (let attempt = 0; attempt <= retryCount; attempt++) {
+      try {
+        const response = (await Promise.race([
+          fetch(
+            finalUrl,
+            requestOptions as RequestInit & { next?: NextFetchOptions }
+          ),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Request timed out")), timeout)
+          ),
+        ])) as Response;
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          const error = new Error(errorData.message || "Request failed");
+          if (onError) {
+            onError(error);
+          }
+          throw error;
+        }
+
+        const contentType = response.headers.get("Content-Type");
+        const data = contentType?.includes("application/json")
+          ? await response.json()
+          : await response.text();
+
+        if (afterResponse) {
+          afterResponse(response);
+        }
+        if (onSuccess) {
+          onSuccess(data);
+        }
+
+        return data;
+      } catch (error) {
+        if (attempt >= retryCount) {
+          if (onError && error instanceof Error) {
+            onError(error);
+          }
+          throw error;
+        }
+        await new Promise((res) => setTimeout(res, retryDelay));
+      }
+    }
   }
 
-  // Shorthand methods for different HTTP verbs
-  get = <T = unknown>(options: FetchOptions<T>) =>
-    this.fetchInternal({ method: "GET", ...options });
-  post = <T = unknown>(options: FetchOptions<T>) =>
-    this.fetchInternal({ method: "POST", ...options });
-  put = <T = unknown>(options: FetchOptions<T>) =>
-    this.fetchInternal({ method: "PUT", ...options });
-  patch = <T = unknown>(options: FetchOptions<T>) =>
-    this.fetchInternal({ method: "PATCH", ...options });
-  delete = <T = unknown>(options: FetchOptions<T>) =>
-    this.fetchInternal({ method: "DELETE", ...options });
+  // Public API methods for HTTP verbs
+  private createRequestMethod(method: string) {
+    return <T = unknown>(options: FetchOptions<T>) =>
+      this.fetchInternal({ method, ...options });
+  }
 
-  // Retrieve the current configuration
+  get = this.createRequestMethod("GET");
+  post = this.createRequestMethod("POST");
+  put = this.createRequestMethod("PUT");
+  patch = this.createRequestMethod("PATCH");
+  delete = this.createRequestMethod("DELETE");
+
+  // Method to retrieve current configuration
   getConfig() {
     return this.config;
   }
 
-  // Update the configuration if necessary
+  // Method to update configuration
   updateConfig(config: Partial<ApiConfig>) {
     this.config = { ...this.config, ...config };
   }

@@ -3,17 +3,12 @@
     "target": "ES2015",
     "module": "commonjs",
     "declaration": true,
-    "outDir": "./dist",
+    "outDir": "./dist/cjs",
     "strict": true,
     "esModuleInterop": true,
     "moduleResolution": "node",
-    "downlevelIteration": true,
-    "lib": ["ES6", "DOM"],
-    "sourceMap": true,
-    "baseUrl": "./",
-    "paths": {
-      "@/*": ["src/*"]
-    }
+    "lib": ["ES2015", "DOM"],
+    "sourceMap": true
   },
   "include": ["src", "cypress/**/*.ts"],
   "exclude": ["node_modules", "dist"]

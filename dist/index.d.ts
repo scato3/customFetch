@@ -6,12 +6,27 @@ interface FetchOptions<T = unknown> {
     headers?: Record<string, string>;
     revalidate?: number;
     tags?: string[];
+    retryCount?: number;
+    retryDelay?: number;
+    onSuccess?: (data: T) => void;
+    onError?: (error: Error) => void;
+    timeout?: number;
+    beforeRequest?: (url: string, options: RequestInit) => void;
+    afterResponse?: (response: Response) => void;
 }
 interface ApiConfig {
     baseUrl: string;
     getToken?: () => string | null;
     onRefreshToken?: () => Promise<void>;
+    onRefreshTokenFailed?: () => void;
     authorizationType?: "Bearer" | "Basic" | string | null;
+}
+interface InternalApiConfig {
+    baseUrl: string;
+    getToken: () => string | null;
+    onRefreshToken: () => Promise<void>;
+    onRefreshTokenFailed: () => void;
+    authorizationType: "Bearer" | "Basic" | string | null;
 }
 declare class Api {
     private config;
@@ -26,7 +41,7 @@ declare class Api {
     put: <T = unknown>(options: FetchOptions<T>) => Promise<any>;
     patch: <T = unknown>(options: FetchOptions<T>) => Promise<any>;
     delete: <T = unknown>(options: FetchOptions<T>) => Promise<any>;
-    getConfig(): ApiConfig;
+    getConfig(): InternalApiConfig;
     updateConfig(config: Partial<ApiConfig>): void;
 }
 export default Api;

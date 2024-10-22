@@ -6399,13 +6399,14 @@ var jsonwebtoken = {
   TokenExpiredError: TokenExpiredError_1,
 };
 
-/* hs-fetch ver 1.06 */
+/* hs-fetch ver 1.07 */
+// API class for handling requests and token management
 var Api = /** @class */function () {
   function Api(config) {
     var _this = this;
-    this.isRefreshingToken = false; // Tracks if token is being refreshed
-    this.tokenRefreshQueue = []; // Queue to handle pending requests during token refresh
-    // Shorthand methods for different HTTP verbs
+    this.isRefreshingToken = false;
+    this.tokenRefreshQueue = [];
+    // Public API methods for HTTP verbs
     this.get = function (options) {
       return _this.fetchInternal(__assign({
         method: "GET"
@@ -6431,7 +6432,6 @@ var Api = /** @class */function () {
         method: "DELETE"
       }, options));
     };
-    // Merging default configuration with provided configuration
     this.config = __assign({
       baseUrl: "",
       getToken: function () {
@@ -6444,10 +6444,11 @@ var Api = /** @class */function () {
           });
         });
       },
+      onRefreshTokenFailed: function () {},
       authorizationType: "Bearer"
     }, config);
   }
-  // Check if the provided token is expired
+  // Method to check if the token is expired
   Api.prototype.isTokenExpired = function (token) {
     try {
       var decoded = jsonwebtoken.decode(token);
@@ -6456,63 +6457,78 @@ var Api = /** @class */function () {
       return true;
     }
   };
-  // Token refresh logic with queue handling
+  // Method for handling token refresh with a queue system
   Api.prototype.handleTokenRefresh = function () {
-    var _a, _b;
+    var _a, _b, _c, _d;
     return __awaiter(this, void 0, void 0, function () {
-      var resolve;
+      var error_1;
       var _this = this;
-      return __generator(this, function (_c) {
-        switch (_c.label) {
+      return __generator(this, function (_e) {
+        switch (_e.label) {
           case 0:
             if (this.isRefreshingToken) {
-              // If token is already being refreshed, push request to the queue
-              return [2 /*return*/, new Promise(function (resolve) {
-                _this.tokenRefreshQueue.push(resolve);
+              return [2 /*return*/, new Promise(function (resolve, reject) {
+                _this.tokenRefreshQueue.push(function () {
+                  if (_this.config.getToken()) {
+                    resolve();
+                  } else {
+                    reject(new Error("Token refresh failed"));
+                  }
+                });
               })];
             }
             this.isRefreshingToken = true;
-            _c.label = 1;
+            _e.label = 1;
           case 1:
-            _c.trys.push([1,, 3, 4]);
-            // Attempt to refresh token
+            _e.trys.push([1, 3, 4, 5]);
             return [4 /*yield*/, (_b = (_a = this.config).onRefreshToken) === null || _b === void 0 ? void 0 : _b.call(_a)];
           case 2:
-            // Attempt to refresh token
-            _c.sent();
-            return [3 /*break*/, 4];
+            _e.sent();
+            this.tokenRefreshQueue.forEach(function (resolve) {
+              return resolve();
+            });
+            return [3 /*break*/, 5];
           case 3:
-            // Once token is refreshed, resolve all pending requests in the queue
-            this.isRefreshingToken = false;
-            while (this.tokenRefreshQueue.length) {
-              resolve = this.tokenRefreshQueue.shift();
-              resolve === null || resolve === void 0 ? void 0 : resolve();
-            }
-            return [7 /*endfinally*/];
+            error_1 = _e.sent();
+            this.tokenRefreshQueue.forEach(function () {});
+            (_d = (_c = this.config).onRefreshTokenFailed) === null || _d === void 0 ? void 0 : _d.call(_c);
+            throw error_1;
           case 4:
+            this.isRefreshingToken = false;
+            this.tokenRefreshQueue = [];
+            return [7 /*endfinally*/];
+          case 5:
             return [2 /*return*/];
         }
       });
     });
   };
-  // Internal fetch method to handle API requests
+  // Internal method to handle fetch requests with retry and timeout logic
   Api.prototype.fetchInternal = function (options) {
-    var _a;
     return __awaiter(this, void 0, void 0, function () {
-      var body, _b, method, query, url, _c, headers, revalidate, tags, fullUrl, token, authorizationHeader, requestHeaders, nextFetchOptions, requestOptions, finalUrl, res, errorData;
-      return __generator(this, function (_d) {
-        switch (_d.label) {
+      var body, _a, method, query, url, _b, headers, revalidate, tags, _c, retryCount, _d, retryDelay, _e, timeout, onSuccess, onError, beforeRequest, afterResponse, fullUrl, token, refreshError_1, authorizationHeader, requestHeaders, nextFetchOptions, requestOptions, finalUrl, attempt, response, errorData, error, contentType, data, _f, error_2;
+      return __generator(this, function (_g) {
+        switch (_g.label) {
           case 0:
-            body = options.body, _b = options.method, method = _b === void 0 ? "GET" : _b, query = options.query, url = options.url, _c = options.headers, headers = _c === void 0 ? {} : _c, revalidate = options.revalidate, tags = options.tags;
+            body = options.body, _a = options.method, method = _a === void 0 ? "GET" : _a, query = options.query, url = options.url, _b = options.headers, headers = _b === void 0 ? {} : _b, revalidate = options.revalidate, tags = options.tags, _c = options.retryCount, retryCount = _c === void 0 ? 3 : _c, _d = options.retryDelay, retryDelay = _d === void 0 ? 1000 : _d, _e = options.timeout, timeout = _e === void 0 ? 5000 : _e, onSuccess = options.onSuccess, onError = options.onError, beforeRequest = options.beforeRequest, afterResponse = options.afterResponse;
             fullUrl = url.startsWith("http") ? url : "".concat(this.config.baseUrl.replace(/\/$/, ""), "/").concat(url.replace(/^\//, ""));
-            token = this.config.getToken ? this.config.getToken() : null;
-            if (!(token && this.isTokenExpired(token))) return [3 /*break*/, 2];
-            return [4 /*yield*/, this.handleTokenRefresh()];
+            token = this.config.getToken();
+            if (!(token && this.isTokenExpired(token))) return [3 /*break*/, 4];
+            _g.label = 1;
           case 1:
-            _d.sent(); // Wait for token refresh
-            token = this.config.getToken ? this.config.getToken() : null;
-            _d.label = 2;
+            _g.trys.push([1, 3,, 4]);
+            return [4 /*yield*/, this.handleTokenRefresh()];
           case 2:
+            _g.sent();
+            token = this.config.getToken();
+            return [3 /*break*/, 4];
+          case 3:
+            refreshError_1 = _g.sent();
+            if (onError && refreshError_1 instanceof Error) {
+              onError(refreshError_1);
+            }
+            throw refreshError_1;
+          case 4:
             authorizationHeader = token ? {
               Authorization: this.config.authorizationType ? "".concat(this.config.authorizationType, " ").concat(token) : token
             } : {};
@@ -6536,28 +6552,83 @@ var Api = /** @class */function () {
             }, nextFetchOptions);
             finalUrl = query ? "".concat(fullUrl, "?").concat(queryString.stringify(query, {
               skipNull: true,
-              skipEmptyString: true // Skip empty string values
+              skipEmptyString: true
             })) : fullUrl;
-            return [4 /*yield*/, fetch(finalUrl, requestOptions)];
-          case 3:
-            res = _d.sent();
-            if (!!res.ok) return [3 /*break*/, 5];
-            return [4 /*yield*/, res.json()];
-          case 4:
-            errorData = _d.sent();
-            throw new Error(errorData.message || "Request failed");
+            if (beforeRequest) {
+              beforeRequest(finalUrl, requestOptions);
+            }
+            attempt = 0;
+            _g.label = 5;
           case 5:
-            // Return the response, parsed as JSON if applicable, otherwise as text
-            return [2 /*return*/, ((_a = res.headers.get("Content-Type")) === null || _a === void 0 ? void 0 : _a.includes("application/json")) ? res.json() : res.text()];
+            if (!(attempt <= retryCount)) return [3 /*break*/, 17];
+            _g.label = 6;
+          case 6:
+            _g.trys.push([6, 14,, 16]);
+            return [4 /*yield*/, Promise.race([fetch(finalUrl, requestOptions), new Promise(function (_, reject) {
+              return setTimeout(function () {
+                return reject(new Error("Request timed out"));
+              }, timeout);
+            })])];
+          case 7:
+            response = _g.sent();
+            if (!!response.ok) return [3 /*break*/, 9];
+            return [4 /*yield*/, response.json()];
+          case 8:
+            errorData = _g.sent();
+            error = new Error(errorData.message || "Request failed");
+            if (onError) {
+              onError(error);
+            }
+            throw error;
+          case 9:
+            contentType = response.headers.get("Content-Type");
+            if (!(contentType === null || contentType === void 0 ? void 0 : contentType.includes("application/json"))) return [3 /*break*/, 11];
+            return [4 /*yield*/, response.json()];
+          case 10:
+            _f = _g.sent();
+            return [3 /*break*/, 13];
+          case 11:
+            return [4 /*yield*/, response.text()];
+          case 12:
+            _f = _g.sent();
+            _g.label = 13;
+          case 13:
+            data = _f;
+            if (afterResponse) {
+              afterResponse(response);
+            }
+            if (onSuccess) {
+              onSuccess(data);
+            }
+            return [2 /*return*/, data];
+          case 14:
+            error_2 = _g.sent();
+            if (attempt >= retryCount) {
+              if (onError && error_2 instanceof Error) {
+                onError(error_2);
+              }
+              throw error_2;
+            }
+            return [4 /*yield*/, new Promise(function (res) {
+              return setTimeout(res, retryDelay);
+            })];
+          case 15:
+            _g.sent();
+            return [3 /*break*/, 16];
+          case 16:
+            attempt++;
+            return [3 /*break*/, 5];
+          case 17:
+            return [2 /*return*/];
         }
       });
     });
   };
-  // Retrieve the current configuration
+  // Method to retrieve current configuration
   Api.prototype.getConfig = function () {
     return this.config;
   };
-  // Update the configuration if necessary
+  // Method to update configuration
   Api.prototype.updateConfig = function (config) {
     this.config = __assign(__assign({}, this.config), config);
   };
