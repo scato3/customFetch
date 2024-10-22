@@ -47,22 +47,11 @@ describe("hs-fetch API E2E 테스트 (Supabase 사용)", () => {
     cy.login(TEST_EMAIL, TEST_PASSWORD);
   });
 
-  beforeEach(() => {
-    // 모든 요청에 apikey를 포함하도록 설정
-    Cypress.on("request", (options) => {
-      options.headers = {
-        ...options.headers,
-        apikey: SUPABASE_ANON_KEY,
-      };
-    });
-  });
-
   it("GET 요청 테스트 (Supabase 데이터 조회)", () => {
     api.get({
       url: `${API_ENDPOINT}/test`,
       query: { select: "*" },
       beforeRequest: (url, options) => {
-        // 요청 전에 토큰이 제대로 적용되었는지 확인
         options.headers = {
           ...options.headers,
           apikey: SUPABASE_ANON_KEY,
@@ -70,7 +59,11 @@ describe("hs-fetch API E2E 테스트 (Supabase 사용)", () => {
         cy.log("Using ACCESS_TOKEN:", Cypress.env("ACCESS_TOKEN"));
       },
       onSuccess: (data) => {
-        expect(data).to.be.an("array");
+        const responseData = data as any[];
+        expect(responseData).to.be.an("array");
+        if (responseData.length > 0) {
+          expect(responseData[0]).to.have.property("key");
+        }
       },
       onError: (error) => {
         throw new Error("GET 요청 실패: " + error.message);
@@ -87,7 +80,6 @@ describe("hs-fetch API E2E 테스트 (Supabase 사용)", () => {
         Prefer: "return=representation",
       },
       beforeRequest: (url, options) => {
-        // 요청 전에 토큰이 제대로 적용되었는지 확인
         options.headers = {
           ...options.headers,
           apikey: SUPABASE_ANON_KEY,
@@ -95,10 +87,110 @@ describe("hs-fetch API E2E 테스트 (Supabase 사용)", () => {
         cy.log("Using ACCESS_TOKEN:", Cypress.env("ACCESS_TOKEN"));
       },
       onSuccess: (data) => {
-        expect(data).to.have.length.greaterThan(0);
+        // POST 응답에서 객체에 특정 필드가 있는지 확인
+        expect(data).to.have.property("key", "value");
+        cy.log("POST된 데이터:", JSON.stringify(data));
       },
       onError: (error) => {
         throw new Error("POST 요청 실패: " + error.message);
+      },
+    });
+  });
+
+  it("PUT 요청 테스트 (Supabase 데이터 수정)", () => {
+    api.put({
+      url: `${API_ENDPOINT}/test?id=eq.21`,
+      body: { id: 21, key: "put" },
+      headers: {
+        "Content-Type": "application/json",
+      },
+      beforeRequest: (url, options) => {
+        options.headers = {
+          ...options.headers,
+          apikey: SUPABASE_ANON_KEY,
+        };
+        cy.log("Using ACCESS_TOKEN:", Cypress.env("ACCESS_TOKEN"));
+      },
+      onSuccess: (data) => {
+        // PUT 요청이 반환하는 데이터 구조를 고려하여 테스트 작성
+        if (Array.isArray(data)) {
+          // 데이터가 배열일 경우
+          expect(data).to.be.an("array").that.is.not.empty;
+          expect(data[0]).to.have.property("key", "put");
+        } else {
+          // 데이터가 객체일 경우
+          expect(data).to.be.an("object").that.has.property("key", "put");
+        }
+        cy.log("PUT으로 수정된 데이터:", JSON.stringify(data));
+      },
+      onError: (error) => {
+        throw new Error("PUT 요청 실패: " + error.message);
+      },
+    });
+  });
+
+  it("PATCH 요청 테스트 (Supabase 데이터 부분 수정)", () => {
+    api.patch({
+      url: `${API_ENDPOINT}/test?id=eq.23`,
+      body: { id: 23, key: "patch" },
+      headers: {
+        "Content-Type": "application/json",
+      },
+      beforeRequest: (url, options) => {
+        options.headers = {
+          ...options.headers,
+          apikey: SUPABASE_ANON_KEY,
+        };
+        cy.log("Using ACCESS_TOKEN:", Cypress.env("ACCESS_TOKEN"));
+      },
+      onSuccess: (data) => {
+        // PATCH 후 반환되는 데이터 구조에 따라 적절히 검사
+        if (Array.isArray(data)) {
+          // 데이터가 배열일 경우
+          expect(data).to.be.an("array").that.is.not.empty;
+          expect(data[0]).to.have.property("key", "patch");
+        } else {
+          // 데이터가 객체일 경우
+          expect(data).to.be.an("object").that.has.property("key", "patch");
+        }
+        cy.log("PATCH로 수정된 데이터:", JSON.stringify(data));
+      },
+      onError: (error) => {
+        throw new Error("PATCH 요청 실패: " + error.message);
+      },
+    });
+  });
+
+  it("DELETE 요청 테스트 (Supabase 데이터 삭제)", () => {
+    // 22번 id 데이터를 삭제
+    api.delete({
+      url: `${API_ENDPOINT}/test?id=eq.25`,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      beforeRequest: (url, options) => {
+        options.headers = {
+          ...options.headers,
+          apikey: SUPABASE_ANON_KEY,
+        };
+        cy.log("Using ACCESS_TOKEN:", Cypress.env("ACCESS_TOKEN"));
+      },
+      onSuccess: () => {
+        // 삭제 후 해당 id가 실제로 없는지 확인
+        api.get({
+          url: `${API_ENDPOINT}/test?id=eq.25`,
+          onSuccess: (data) => {
+            // id가 22인 데이터가 조회되지 않아야 함
+            expect(data).to.be.an("array").that.is.empty;
+            cy.log("해당 데이터가 삭제됨:", JSON.stringify(data));
+          },
+          onError: (error) => {
+            throw new Error("데이터 삭제 확인 실패: " + error.message);
+          },
+        });
+      },
+      onError: (error) => {
+        throw new Error("DELETE 요청 실패: " + error.message);
       },
     });
   });
@@ -137,10 +229,10 @@ describe("hs-fetch API E2E 테스트 (Supabase 사용)", () => {
         expect(url).to.contain("/test");
         options.headers = {
           ...options.headers,
-          "X-Custom-Header": "customValue",
           apikey: SUPABASE_ANON_KEY,
+          "X-Custom-Header": "customValue",
         };
-        cy.log("Using ACCESS_TOKEN:", Cypress.env("ACCESS_TOKEN"));
+        cy.log("Request headers:", JSON.stringify(options.headers));
       },
       afterResponse: (response) => {
         expect(response.status).to.equal(200);
