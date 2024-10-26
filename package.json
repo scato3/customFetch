@@ -1,12 +1,14 @@
 {
   "name": "hs-fetch",
-  "version": "1.0.7",
+  "version": "1.0.9",
   "main": "dist/index.cjs.js",
   "module": "dist/index.esm.js",
   "browser": "dist/index.esm.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "rollup -c",
+    "build:es5": "rollup -c --environment FORMAT:es5",
+    "build:es6": "rollup -c --environment FORMAT:es6",
+    "build": "npm run build:es5 && npm run build:es6",
     "prepublishOnly": "npm run build",
     "cypress:open": "cypress open",
     "cypress:run": "cypress run"

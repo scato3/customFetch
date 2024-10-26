@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES5",
-    "module": "commonjs",
+    "module": "ESNext",
     "declaration": true,
     "outDir": "./dist/es5",
     "strict": true,
@@ -10,6 +10,6 @@
     "lib": ["ES5", "DOM"],
     "sourceMap": true
   },
-  "include": ["src", "cypress/**/*.ts"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }
