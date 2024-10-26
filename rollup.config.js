@@ -2,7 +2,7 @@ import resolve from "@rollup/plugin-node-resolve";
 import commonjs from "@rollup/plugin-commonjs";
 import typescript from "@rollup/plugin-typescript";
 import { babel } from "@rollup/plugin-babel";
-import { terser } from "@rollup-plugin-terser";
+import { terser } from "rollup-plugin-terser";
 
 const es5Config = {
   input: "src/index.ts",
@@ -10,12 +10,12 @@ const es5Config = {
     {
       file: "dist/es5/index.cjs.js",
       format: "cjs",
-      sourcemap: true,
+      sourcemap: false,
     },
     {
       file: "dist/es5/index.esm.js",
       format: "esm",
-      sourcemap: true,
+      sourcemap: false,
     },
   ],
   plugins: [
@@ -49,12 +49,12 @@ const es6Config = {
     {
       file: "dist/es6/index.cjs.js",
       format: "cjs",
-      sourcemap: true,
+      sourcemap: false,
     },
     {
       file: "dist/es6/index.esm.js",
       format: "esm",
-      sourcemap: true,
+      sourcemap: false,
     },
   ],
   plugins: [
