@@ -1,4 +1,4 @@
-/* hs-fetch ver 1.08 */
+/* hs-fetch ver 1.1.3 */
 
 import queryString from "query-string";
 import jwt from "jsonwebtoken";

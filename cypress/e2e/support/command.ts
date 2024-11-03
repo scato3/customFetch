@@ -1,4 +1,4 @@
-// Fetch Supabase URL and anon key from environment variables
+/// <reference types="cypress" />
 const SUPABASE_URL = Cypress.env("SUPABASE_URL");
 const SUPABASE_ANON_KEY = Cypress.env("SUPABASE_ANON_KEY");
 
