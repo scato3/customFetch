@@ -6,8 +6,8 @@
 
 ## Key Features
 
-- **Token Management**: Automatically checks for token expiration and refreshes tokens as needed.
-- **Retry Logic**: Retries requests on failure for a specified number of times, with configurable delay intervals.
+- **Token Management**: Automatically checks for token expiration and refreshes tokens as needed. Handles multiple requests in a queue during token refresh, ensuring only one refresh occurs at a time.
+- **Retry Logic**: Retries requests on failure for a specified number of times, with configurable delay intervals. Manages `401 Unauthorized` responses with a limit to prevent infinite loops.
 - **Timeout Handling**: Allows setting timeouts for requests, canceling them if the response takes too long.
 - **Hooks Support**: Provides hooks for custom logic before and after requests.
 - **Next.js Integration**: Options like `revalidate` and `tags` for compatibility with Next.js ISR (Incremental Static Regeneration).

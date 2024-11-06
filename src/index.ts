@@ -147,7 +147,7 @@ class Api {
       onError,
       beforeRequest,
       afterResponse,
-      useToken = true, // Default to using token
+      useToken = true,
     } = options;
 
     const fullUrl = url.startsWith("http")
@@ -161,7 +161,7 @@ class Api {
       if (token && this.isTokenExpired(token)) {
         try {
           await this.handleTokenRefresh();
-          token = this.config.getToken();
+          token = this.config.getToken?.() ?? null;
         } catch (refreshError) {
           if (onError && refreshError instanceof Error) {
             onError(refreshError);
@@ -202,11 +202,10 @@ class Api {
       beforeRequest(finalUrl, requestOptions);
     }
 
-    // Using AbortController to handle request timeout
     const controller = new AbortController();
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => {
-        controller.abort(); // Abort the request on timeout
+        controller.abort();
         reject(new Error("Request timed out"));
       }, timeout)
     );
@@ -223,15 +222,16 @@ class Api {
           timeoutPromise,
         ])) as Response;
 
-        // Check for 401 Unauthorized to handle token refresh
         if (response.status === 401 && useToken) {
-          await this.handleTokenRefresh(); // Refresh the token
+          try {
+            await this.handleTokenRefresh();
+            token = this.config.getToken?.() ?? null;
+            requestHeaders = this.createHeaders(token, headers, useToken);
+            requestOptions.headers = requestHeaders;
+          } catch (refreshError) {
+            throw new Error("Token refresh failed or unauthorized access.");
+          }
 
-          token = this.config.getToken?.() ?? null;
-          requestHeaders = this.createHeaders(token, headers, useToken);
-          requestOptions.headers = requestHeaders;
-
-          // Retry the request with the new token
           continue; // Retry the loop with updated token
         }
 
