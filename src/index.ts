@@ -1,4 +1,4 @@
-/* hs-fetch ver 1.1.3 */
+/* hs-fetch ver 1.1.4 */
 
 import queryString from "query-string";
 import jwt from "jsonwebtoken";
@@ -75,6 +75,7 @@ class Api {
   // Method for handling token refresh with a queue system
   private async handleTokenRefresh(): Promise<void> {
     if (this.isRefreshingToken) {
+      // If token is currently refreshing, push request to the queue
       return new Promise<void>((resolve, reject) => {
         this.tokenRefreshQueue.push({ resolve, reject });
       });
@@ -84,18 +85,23 @@ class Api {
 
     try {
       await this.config.onRefreshToken?.();
+
+      // On successful refresh, resolve all requests in the queue
+      while (this.tokenRefreshQueue.length) {
+        const { resolve } = this.tokenRefreshQueue.shift()!;
+        resolve();
+      }
     } catch (error) {
+      this.config.onRefreshTokenFailed?.();
+
+      // On refresh failure, reject all requests in the queue with the error
       while (this.tokenRefreshQueue.length) {
         const { reject } = this.tokenRefreshQueue.shift()!;
-        reject?.(error);
+        reject(error);
       }
       throw error;
     } finally {
       this.isRefreshingToken = false;
-      while (this.tokenRefreshQueue.length) {
-        const { resolve } = this.tokenRefreshQueue.shift()!;
-        resolve?.();
-      }
     }
   }
 
@@ -105,6 +111,7 @@ class Api {
     headers: Record<string, string>,
     useToken: boolean
   ): HeadersInit {
+    // Adds Authorization header if useToken is true and token is available
     const authorizationHeader: Record<string, string> =
       useToken && token
         ? {
@@ -121,7 +128,7 @@ class Api {
     };
   }
 
-  // Internal method to handle fetch requests with retry and timeout logic
+  // Internal method to handle fetch requests with retry, timeout, and 401 handling logic
   private async fetchInternal<T = unknown>(
     options: FetchOptions<T>
   ): Promise<any> {
@@ -164,7 +171,7 @@ class Api {
       }
     }
 
-    const requestHeaders = this.createHeaders(token, headers, useToken);
+    let requestHeaders = this.createHeaders(token, headers, useToken);
 
     const nextFetchOptions: Partial<{ next: NextFetchOptions }> = {};
     if (revalidate || tags) {
@@ -195,6 +202,17 @@ class Api {
       beforeRequest(finalUrl, requestOptions);
     }
 
+    // Using AbortController to handle request timeout
+    const controller = new AbortController();
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => {
+        controller.abort(); // Abort the request on timeout
+        reject(new Error("Request timed out"));
+      }, timeout)
+    );
+
+    requestOptions.signal = controller.signal;
+
     for (let attempt = 0; attempt <= retryCount; attempt++) {
       try {
         const response = (await Promise.race([
@@ -202,10 +220,20 @@ class Api {
             finalUrl,
             requestOptions as RequestInit & { next?: NextFetchOptions }
           ),
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Request timed out")), timeout)
-          ),
+          timeoutPromise,
         ])) as Response;
+
+        // Check for 401 Unauthorized to handle token refresh
+        if (response.status === 401 && useToken) {
+          await this.handleTokenRefresh(); // Refresh the token
+
+          token = this.config.getToken?.() ?? null;
+          requestHeaders = this.createHeaders(token, headers, useToken);
+          requestOptions.headers = requestHeaders;
+
+          // Retry the request with the new token
+          continue; // Retry the loop with updated token
+        }
 
         if (!response.ok) {
           const errorData = await response.json();
