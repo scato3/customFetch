@@ -11,10 +11,6 @@ const SUPABASE_ANON_KEY = Cypress.env("SUPABASE_ANON_KEY");
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 describe("hs-fetch API E2E Test (Using Supabase)", () => {
-  // Test user's email and password
-  const TEST_EMAIL = "test1234@test.com";
-  const TEST_PASSWORD = "123456";
-
   const API_ENDPOINT = Cypress.env("API_ENDPOINT") || "/rest/v1";
 
   const api = new Api({
@@ -32,19 +28,12 @@ describe("hs-fetch API E2E Test (Using Supabase)", () => {
       if (data?.session?.access_token) {
         Cypress.env("ACCESS_TOKEN", data.session.access_token);
         Cypress.env("REFRESH_TOKEN", data.session.refresh_token);
-
-        // Log refreshed tokens
         cy.log("New ACCESS_TOKEN:", data.session.access_token);
         cy.log("New REFRESH_TOKEN:", data.session.refresh_token);
       } else {
         throw new Error("Failed to get a new access token");
       }
     },
-  });
-
-  before(() => {
-    // Log in user before tests start
-    cy.login(TEST_EMAIL, TEST_PASSWORD);
   });
 
   it("GET Request Test (Retrieve Data from Supabase)", () => {
