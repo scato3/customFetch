@@ -1,5 +1,3 @@
-/* hs-fetch ver 1.2.5 */
-
 import queryString from "query-string";
 import jwt from "jsonwebtoken";
 
@@ -15,9 +13,9 @@ interface NextFetchOptions {
 }
 
 // Main fetch options interface
-interface FetchOptions<T = unknown> {
+interface FetchOptions<RequestBody = unknown, ResponseData = unknown> {
   method?: string;
-  body?: T;
+  body?: RequestBody;
   query?: Record<string, unknown>;
   url: string;
   headers?: Record<string, string>;
@@ -26,7 +24,7 @@ interface FetchOptions<T = unknown> {
   retryCount?: number; // Retry count; default is 3 times
   retryDelay?: number; // Delay between retries in milliseconds
   timeout?: number; // Request timeout in milliseconds
-  onSuccess?: (data: T) => void;
+  onSuccess?: (data: ResponseData) => void;
   onError?: (error: Error) => void;
   beforeRequest?: (url: string, options: RequestInit) => void; // Hook before request
   afterResponse?: (response: Response) => void; // Hook after response
@@ -36,7 +34,7 @@ interface FetchOptions<T = unknown> {
 // Interface for API configuration
 interface ApiConfig {
   baseUrl: string;
-  getToken?: () => string | null;
+  getToken?: () => string | null | Promise<string | null>;
   onRefreshToken?: () => Promise<void>;
   onRefreshTokenFailed?: () => void;
   authorizationType?: "Bearer" | "Basic" | string | null;
@@ -129,9 +127,9 @@ class Api {
   }
 
   // Internal method to handle fetch requests with retry, timeout, and 401 handling logic
-  private async fetchInternal<T = unknown>(
-    options: FetchOptions<T>
-  ): Promise<any> {
+  private async fetchInternal<RequestBody, ResponseData>(
+    options: FetchOptions<RequestBody, ResponseData>
+  ): Promise<ResponseData> {
     const {
       body,
       method = "GET",
@@ -140,7 +138,7 @@ class Api {
       headers = {},
       revalidate,
       tags,
-      retryCount = 3,
+      retryCount = 0,
       retryDelay = 1000,
       timeout = 5000,
       onSuccess,
@@ -156,12 +154,12 @@ class Api {
 
     let token = null;
     if (useToken && this.config.getToken) {
-      token = this.config.getToken();
+      token = await this.config.getToken();
 
       if (token && this.isTokenExpired(token)) {
         try {
           await this.handleTokenRefresh();
-          token = this.config.getToken?.() ?? null;
+          token = (await this.config.getToken?.()) ?? null;
         } catch (refreshError) {
           if (onError && refreshError instanceof Error) {
             onError(refreshError);
@@ -225,7 +223,7 @@ class Api {
         if (response.status === 401 && useToken) {
           try {
             await this.handleTokenRefresh();
-            token = this.config.getToken?.() ?? null;
+            token = (await this.config.getToken?.()) ?? null;
             requestHeaders = this.createHeaders(token, headers, useToken);
             requestOptions.headers = requestHeaders;
           } catch (refreshError) {
@@ -267,19 +265,20 @@ class Api {
         await new Promise((res) => setTimeout(res, retryDelay));
       }
     }
+    throw new Error("Max retry attempts reached");
   }
 
   // Public API methods for HTTP verbs
-  private createRequestMethod(method: string) {
-    return <T = unknown>(options: FetchOptions<T>) =>
-      this.fetchInternal({ method, ...options });
+  private createRequestMethod<RequestBody, ResponseData>(method: string) {
+    return (options: FetchOptions<RequestBody, ResponseData>) =>
+      this.fetchInternal<RequestBody, ResponseData>({ method, ...options });
   }
 
-  get = this.createRequestMethod("GET");
-  post = this.createRequestMethod("POST");
-  put = this.createRequestMethod("PUT");
-  patch = this.createRequestMethod("PATCH");
-  delete = this.createRequestMethod("DELETE");
+  get = this.createRequestMethod<undefined, unknown>("GET");
+  post = this.createRequestMethod<unknown, unknown>("POST");
+  put = this.createRequestMethod<unknown, unknown>("PUT");
+  patch = this.createRequestMethod<unknown, unknown>("PATCH");
+  delete = this.createRequestMethod<undefined, unknown>("DELETE");
 
   // Method to retrieve current configuration
   getConfig() {

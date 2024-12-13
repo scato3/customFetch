@@ -1,6 +1,6 @@
 {
   "name": "hs-fetch",
-  "version": "1.2.5",
+  "version": "1.2.9",
   "main": "dist/esm/index.esm.js",
   "module": "dist/esm/index.esm.js",
   "browser": "dist/esm/index.esm.js",
@@ -8,8 +8,9 @@
   "type": "module",
   "exports": {
     ".": {
-      "import": "dist/esm/index.esm.js",
-      "require": "dist/cjs/index.cjs.js"
+      "import": "./dist/esm/index.esm.js",
+      "require": "./dist/cjs/index.cjs.js",
+      "default": "./dist/esm/index.esm.js"
     }
   },
   "files": [
