@@ -1,3 +1,5 @@
+/* hs-fetch ver 1.2.5 */
+
 import queryString from "query-string";
 import jwt from "jsonwebtoken";
 
@@ -13,9 +15,9 @@ interface NextFetchOptions {
 }
 
 // Main fetch options interface
-interface FetchOptions<RequestBody = unknown, ResponseData = unknown> {
+interface FetchOptions<T = unknown> {
   method?: string;
-  body?: RequestBody;
+  body?: T;
   query?: Record<string, unknown>;
   url: string;
   headers?: Record<string, string>;
@@ -24,7 +26,7 @@ interface FetchOptions<RequestBody = unknown, ResponseData = unknown> {
   retryCount?: number; // Retry count; default is 3 times
   retryDelay?: number; // Delay between retries in milliseconds
   timeout?: number; // Request timeout in milliseconds
-  onSuccess?: (data: ResponseData) => void;
+  onSuccess?: (data: T) => void;
   onError?: (error: Error) => void;
   beforeRequest?: (url: string, options: RequestInit) => void; // Hook before request
   afterResponse?: (response: Response) => void; // Hook after response
@@ -127,9 +129,9 @@ class Api {
   }
 
   // Internal method to handle fetch requests with retry, timeout, and 401 handling logic
-  private async fetchInternal<RequestBody, ResponseData>(
-    options: FetchOptions<RequestBody, ResponseData>
-  ): Promise<ResponseData> {
+  private async fetchInternal<T = unknown>(
+    options: FetchOptions<T>
+  ): Promise<any> {
     const {
       body,
       method = "GET",
@@ -157,6 +159,7 @@ class Api {
       token = await this.config.getToken();
 
       if (token && this.isTokenExpired(token)) {
+        // token이 string | null로 보장됩니다.
         try {
           await this.handleTokenRefresh();
           token = (await this.config.getToken?.()) ?? null;
@@ -265,20 +268,19 @@ class Api {
         await new Promise((res) => setTimeout(res, retryDelay));
       }
     }
-    throw new Error("Max retry attempts reached");
   }
 
   // Public API methods for HTTP verbs
-  private createRequestMethod<RequestBody, ResponseData>(method: string) {
-    return (options: FetchOptions<RequestBody, ResponseData>) =>
-      this.fetchInternal<RequestBody, ResponseData>({ method, ...options });
+  private createRequestMethod(method: string) {
+    return <T = unknown>(options: FetchOptions<T>) =>
+      this.fetchInternal({ method, ...options });
   }
 
-  get = this.createRequestMethod<undefined, unknown>("GET");
-  post = this.createRequestMethod<unknown, unknown>("POST");
-  put = this.createRequestMethod<unknown, unknown>("PUT");
-  patch = this.createRequestMethod<unknown, unknown>("PATCH");
-  delete = this.createRequestMethod<undefined, unknown>("DELETE");
+  get = this.createRequestMethod("GET");
+  post = this.createRequestMethod("POST");
+  put = this.createRequestMethod("PUT");
+  patch = this.createRequestMethod("PATCH");
+  delete = this.createRequestMethod("DELETE");
 
   // Method to retrieve current configuration
   getConfig() {
