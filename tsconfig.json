@@ -1,16 +1,23 @@
 {
   "compilerOptions": {
-    "target": "ES6",
-    "module": "ESNext",
-    "declaration": true,
-    "declarationDir": "./dist/types",
-    "outDir": "./dist/es6",
-    "strict": true,
+    "target": "es2015",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "emitDeclarationOnly": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "moduleResolution": "node",
-    "lib": ["ES6", "DOM"],
-    "sourceMap": false,
-    "types": ["cypress"]
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "declarationDir": "./dist",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "paths": {
+      "*": ["./node_modules/*"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

@@ -1,12 +1,12 @@
 /* hs-fetch ver 1.2.5 */
 
-import queryString from "query-string";
-import jwt from "jsonwebtoken";
+import 'core-js/stable';
+import 'regenerator-runtime/runtime';
 
-// Interface for decoding token
-interface DecodedToken {
-  exp: number;
-}
+// fetch 폴리필 (Node.js 환경을 위해)
+import 'whatwg-fetch';
+
+import queryString from "query-string";
 
 // Interface for Next.js-specific fetch options
 interface NextFetchOptions {
@@ -60,16 +60,6 @@ class Api {
       authorizationType: "Bearer",
       ...config,
     };
-  }
-
-  // Method to check if the token is expired
-  isTokenExpired(token: string): boolean {
-    try {
-      const decoded = jwt.decode(token) as DecodedToken | null;
-      return decoded ? decoded.exp < Date.now() / 1000 : true;
-    } catch {
-      return true;
-    }
   }
 
   // Method for handling token refresh with a queue system
@@ -157,19 +147,6 @@ class Api {
     let token = null;
     if (useToken && this.config.getToken) {
       token = await this.config.getToken();
-
-      if (token && this.isTokenExpired(token)) {
-        // token이 string | null로 보장됩니다.
-        try {
-          await this.handleTokenRefresh();
-          token = (await this.config.getToken?.()) ?? null;
-        } catch (refreshError) {
-          if (onError && refreshError instanceof Error) {
-            onError(refreshError);
-          }
-          throw refreshError;
-        }
-      }
     }
 
     let requestHeaders = this.createHeaders(token, headers, useToken);
