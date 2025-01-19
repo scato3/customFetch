@@ -6,7 +6,7 @@ const SUPABASE_ANON_KEY = Cypress.env("SUPABASE_ANON_KEY");
 Cypress.Commands.add("login", (email: string, password: string) => {
   cy.request({
     method: "POST",
-    url: `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
+    url: `${SUPABASE_URL.replace('http://', 'https://')}/auth/v1/token?grant_type=password`,
     body: {
       email,
       password,
