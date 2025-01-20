@@ -1,229 +1,208 @@
 /// <reference types="cypress" />
 
-import { createClient } from "@supabase/supabase-js";
 import Api from "../../src/index";
 
-// Fetch Supabase URL and anon key from environment variables
-const SUPABASE_URL = Cypress.env("SUPABASE_URL");
-const SUPABASE_ANON_KEY = Cypress.env("SUPABASE_ANON_KEY");
+describe("hs-fetch API E2E Test", () => {
+  const API_ENDPOINT = "/api";
 
-// Create a Supabase client
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  beforeEach(() => {
+    // 각 HTTP 메소드별 모의 응답 설정
+    cy.intercept("GET", `${API_ENDPOINT}/test*`, {
+      statusCode: 200,
+      body: [{ id: 1, key: "value" }],
+    }).as("getRequest");
 
-describe("hs-fetch API E2E Test (Using Supabase)", () => {
-  const API_ENDPOINT = Cypress.env("API_ENDPOINT") || "/rest/v1";
+    cy.intercept("POST", `${API_ENDPOINT}/test*`, {
+      statusCode: 201,
+      body: { id: 2, key: "value" },
+    }).as("postRequest");
+
+    cy.intercept("PUT", `${API_ENDPOINT}/test/*`, {
+      statusCode: 200,
+      body: { id: 3, key: "updated" },
+    }).as("putRequest");
+
+    cy.intercept("PATCH", `${API_ENDPOINT}/test/*`, {
+      statusCode: 200,
+      body: { id: 4, key: "patched" },
+    }).as("patchRequest");
+
+    cy.intercept("DELETE", `${API_ENDPOINT}/test/*`, {
+      statusCode: 204,
+    }).as("deleteRequest");
+  });
 
   const api = new Api({
-    baseUrl: SUPABASE_URL,
-    getToken: () => Cypress.env("ACCESS_TOKEN"),
+    baseUrl: Cypress.config().baseUrl || "",
+    getToken: () => Cypress.env("ACCESS_TOKEN") || "test-token",
     onRefreshToken: async () => {
-      const { data, error } = await supabase.auth.refreshSession({
-        refresh_token: Cypress.env("REFRESH_TOKEN"),
-      });
-
-      if (error) {
-        throw new Error("Token refresh failed: " + error.message);
-      }
-
-      if (data?.session?.access_token) {
-        Cypress.env("ACCESS_TOKEN", data.session.access_token);
-        Cypress.env("REFRESH_TOKEN", data.session.refresh_token);
-        cy.log("New ACCESS_TOKEN:", data.session.access_token);
-        cy.log("New REFRESH_TOKEN:", data.session.refresh_token);
-      } else {
-        throw new Error("Failed to get a new access token");
-      }
+      // 토큰 갱신 즉시 수행
+      Cypress.env("ACCESS_TOKEN", "new-test-token");
     },
   });
 
-  it("GET Request Test (Retrieve Data from Supabase)", () => {
+  it("GET Request Test", () => {
     api.get({
       url: `${API_ENDPOINT}/test`,
       query: { select: "*" },
-      beforeRequest: (url, options) => {
-        options.headers = {
-          ...options.headers,
-          apikey: SUPABASE_ANON_KEY,
-        };
-        cy.log("Using ACCESS_TOKEN:", Cypress.env("ACCESS_TOKEN"));
+      onSuccess: (data: Array<{ id: number; key: string }>) => {
+        expect(data).to.be.an("array");
+        expect(data[0]).to.have.property("key");
       },
-      onSuccess: (data) => {
-        const responseData = data as any[];
-        expect(responseData).to.be.an("array");
-        if (responseData.length > 0) {
-          expect(responseData[0]).to.have.property("key");
-        }
-      },
-      onError: (error) => {
-        throw new Error("GET request failed: " + error.message);
-      },
+    });
+
+    cy.wait("@getRequest").then((interception) => {
+      expect(interception.request.headers).to.have.property(
+        "authorization",
+        "Bearer test-token"
+      );
+      expect(interception.request.url).to.include("/api/test");
     });
   });
 
-  it("POST Request Test (Add Data to Supabase)", () => {
+  it("POST Request Test", () => {
+    const testData = { key: "value" };
     api.post({
       url: `${API_ENDPOINT}/test`,
-      body: { key: "value" },
-      headers: {
-        "Content-Type": "application/json",
-        Prefer: "return=representation",
-      },
-      beforeRequest: (url, options) => {
-        options.headers = {
-          ...options.headers,
-          apikey: SUPABASE_ANON_KEY,
-        };
-        cy.log("Using ACCESS_TOKEN:", Cypress.env("ACCESS_TOKEN"));
-      },
-      onSuccess: (data) => {
-        // Check if the POST response contains the expected property
+      body: testData,
+      onSuccess: (data: { key: string } & { id?: number }) => {
         expect(data).to.have.property("key", "value");
-        cy.log("Posted data:", JSON.stringify(data));
       },
-      onError: (error) => {
-        throw new Error("POST request failed: " + error.message);
-      },
+    });
+
+    cy.wait("@postRequest").then((interception) => {
+      expect(interception.request.body).to.deep.equal(testData);
+      expect(interception.request.headers).to.have.property(
+        "authorization",
+        "Bearer test-token"
+      );
     });
   });
 
-  it("PUT Request Test (Update Data in Supabase)", () => {
+  it("PUT Request Test", () => {
+    const updateData = { id: 3, key: "updated" };
     api.put({
-      url: `${API_ENDPOINT}/test?id=eq.21`,
-      body: { id: 21, key: "put" },
-      headers: {
-        "Content-Type": "application/json",
+      url: `${API_ENDPOINT}/test/3`,
+      body: updateData,
+      onSuccess: (data: { key: string } & { id?: number }) => {
+        expect(data).to.have.property("key", "updated");
       },
-      beforeRequest: (url, options) => {
-        options.headers = {
-          ...options.headers,
-          apikey: SUPABASE_ANON_KEY,
-        };
-        cy.log("Using ACCESS_TOKEN:", Cypress.env("ACCESS_TOKEN"));
-      },
-      onSuccess: (data) => {
-        // Handle different response structures for PUT requests
-        if (Array.isArray(data)) {
-          // If the response is an array
-          expect(data).to.be.an("array").that.is.not.empty;
-          expect(data[0]).to.have.property("key", "put");
-        } else {
-          // If the response is an object
-          expect(data).to.be.an("object").that.has.property("key", "put");
-        }
-        cy.log("Updated data:", JSON.stringify(data));
-      },
-      onError: (error) => {
-        throw new Error("PUT request failed: " + error.message);
-      },
+    });
+
+    cy.wait("@putRequest").then((interception) => {
+      expect(interception.request.body).to.deep.equal(updateData);
+      expect(interception.request.headers).to.have.property(
+        "authorization",
+        "Bearer test-token"
+      );
     });
   });
 
-  it("PATCH Request Test (Partially Update Data in Supabase)", () => {
+  it("PATCH Request Test", () => {
+    const patchData = { key: "patched" };
     api.patch({
-      url: `${API_ENDPOINT}/test?id=eq.23`,
-      body: { id: 23, key: "patch" },
-      headers: {
-        "Content-Type": "application/json",
+      url: `${API_ENDPOINT}/test/4`,
+      body: patchData,
+      onSuccess: (data: { key: string } & { id?: number }) => {
+        expect(data).to.have.property("key", "patched");
       },
-      beforeRequest: (url, options) => {
-        options.headers = {
-          ...options.headers,
-          apikey: SUPABASE_ANON_KEY,
-        };
-        cy.log("Using ACCESS_TOKEN:", Cypress.env("ACCESS_TOKEN"));
-      },
-      onSuccess: (data) => {
-        // Handle different response structures for PATCH requests
-        if (Array.isArray(data)) {
-          expect(data).to.be.an("array").that.is.not.empty;
-          expect(data[0]).to.have.property("key", "patch");
-        } else {
-          expect(data).to.be.an("object").that.has.property("key", "patch");
-        }
-        cy.log("Partially updated data:", JSON.stringify(data));
-      },
-      onError: (error) => {
-        throw new Error("PATCH request failed: " + error.message);
-      },
+    });
+
+    cy.wait("@patchRequest").then((interception) => {
+      expect(interception.request.body).to.deep.equal(patchData);
+      expect(interception.request.headers).to.have.property(
+        "authorization",
+        "Bearer test-token"
+      );
     });
   });
 
-  it("DELETE Request Test (Delete Data in Supabase)", () => {
+  it("DELETE Request Test", () => {
     api.delete({
-      url: `${API_ENDPOINT}/test?id=eq.25`,
+      url: `${API_ENDPOINT}/test/5`,
+      onSuccess: () => {
+        // DELETE는 보통 204 No Content로 응답
+      },
+    });
+
+    cy.wait("@deleteRequest").then((interception) => {
+      expect(interception.request.headers).to.have.property(
+        "authorization",
+        "Bearer test-token"
+      );
+    });
+  });
+
+  it("Token Refresh Test", () => {
+    let isFirstRequest = true;
+    Cypress.env("ACCESS_TOKEN", "test-token");
+
+    cy.intercept("GET", `${API_ENDPOINT}/test`, (req) => {
+      const authHeader = req.headers.authorization;
+
+      if (authHeader === "Bearer test-token" && isFirstRequest) {
+        isFirstRequest = false;
+        req.reply({
+          statusCode: 401,
+          headers: { "www-authenticate": 'Bearer error="invalid_token"' },
+        });
+      } else {
+        req.reply({
+          statusCode: 200,
+          body: [{ id: 1, key: "value" }],
+        });
+      }
+    }).as("tokenRefresh");
+
+    api.get({
+      url: `${API_ENDPOINT}/test`,
+      onSuccess: (data: Array<{ id: number; key: string }>) => {
+        expect(data).to.be.an("array");
+      },
+    });
+
+    // 첫 번째 요청 (401)과 두 번째 요청 (200) 확인
+    cy.wait("@tokenRefresh").then((interception) => {
+      expect(interception.response?.statusCode).to.equal(401);
+    });
+
+    cy.wait("@tokenRefresh").then((interception) => {
+      expect(interception.response?.statusCode).to.equal(200);
+    });
+  });
+
+  it("Error Handling Test", () => {
+    cy.intercept("GET", `${API_ENDPOINT}/test/error`, {
+      statusCode: 500,
+      body: { message: "Request failed" },
       headers: {
         "Content-Type": "application/json",
       },
-      beforeRequest: (url, options) => {
-        options.headers = {
-          ...options.headers,
-          apikey: SUPABASE_ANON_KEY,
-        };
-        cy.log("Using ACCESS_TOKEN:", Cypress.env("ACCESS_TOKEN"));
-      },
-      onSuccess: () => {
-        // Confirm that the data with the deleted id no longer exists
-        api.get({
-          url: `${API_ENDPOINT}/test?id=eq.25`,
-          onSuccess: (data) => {
-            expect(data).to.be.an("array").that.is.empty;
-            cy.log("Data with ID 25 deleted:", JSON.stringify(data));
-          },
-          onError: (error) => {
-            throw new Error(
-              "Failed to confirm data deletion: " + error.message
-            );
-          },
-        });
-      },
+    }).as("errorRequest");
+
+    api.get({
+      url: `${API_ENDPOINT}/test/error`,
       onError: (error) => {
-        throw new Error("DELETE request failed: " + error.message);
+        expect(error).to.be.instanceOf(Error);
+        expect(error.message).to.contain("Request failed");
       },
     });
   });
 
-  it("Token Expiry and Refresh Test (Supabase)", () => {
-    // Set an expired token
-    Cypress.env("ACCESS_TOKEN", "expired_token");
-
-    cy.log("Using ACCESS_TOKEN before refresh:", Cypress.env("ACCESS_TOKEN"));
+  it("Timeout Test", () => {
+    cy.intercept("GET", `${API_ENDPOINT}/test/timeout`, (req) => {
+      req.reply({
+        statusCode: 200,
+        body: { data: "delayed response" },
+        delay: 6000, // milliseconds
+      });
+    }).as("timeoutRequest");
 
     api.get({
-      url: `${API_ENDPOINT}/test`,
-      query: { select: "*" },
-      beforeRequest: (url, options) => {
-        options.headers = {
-          ...options.headers,
-          apikey: SUPABASE_ANON_KEY,
-        };
-        cy.log("Using ACCESS_TOKEN:", Cypress.env("ACCESS_TOKEN"));
-      },
-      onSuccess: (data) => {
-        expect(data).to.be.an("array");
-      },
+      url: `${API_ENDPOINT}/test/timeout`,
+      timeout: 5000,
       onError: (error) => {
-        throw new Error("Token refresh failed: " + error.message);
-      },
-    });
-  });
-
-  it("Pre-Request and Post-Response Hook Test (Supabase)", () => {
-    api.get({
-      url: `${API_ENDPOINT}/test`,
-      beforeRequest: (url, options) => {
-        expect(url).to.contain("/test");
-        options.headers = {
-          ...options.headers,
-          apikey: SUPABASE_ANON_KEY,
-          "X-Custom-Header": "customValue",
-        };
-        cy.log("Request headers:", JSON.stringify(options.headers));
-      },
-      afterResponse: (response) => {
-        expect(response.status).to.equal(200);
-      },
-      onSuccess: (data) => {
-        expect(data).to.be.an("array");
+        expect(error.message).to.equal("Request timed out");
       },
     });
   });

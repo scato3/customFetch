@@ -1,9 +1,9 @@
 declare namespace Cypress {
   interface Chainable<Subject = any> {
     /**
-     * Custom command to log in to the application
-     * @example cy.login('email', 'password')
+     * Custom command to set test token
+     * @example cy.setTestToken('test-token')
      */
-    login(email: string, password: string): Chainable<void>;
+    setTestToken(token: string): Chainable<void>;
   }
 }

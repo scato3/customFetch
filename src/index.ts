@@ -1,12 +1,12 @@
-/* hs-fetch ver 1.2.5 */
+/* hs-fetch ver 1.4.0 */
 
-import 'core-js/stable';
-import 'regenerator-runtime/runtime';
-import 'whatwg-fetch';
+import "core-js/stable";
+import "regenerator-runtime/runtime";
+import "whatwg-fetch";
 
-import type { ApiConfig, FetchOptions } from './types';
-import { TokenManager } from './utils/token';
-import { RequestHandler } from './core/request';
+import type { ApiConfig, FetchOptions } from "./types";
+import { TokenManager } from "./utils/token";
+import { RequestHandler } from "./core/request";
 
 // API class for handling requests and token management
 class Api {
@@ -24,16 +24,12 @@ class Api {
       ...config,
     };
     this.tokenManager = new TokenManager();
-    this.requestHandler = new RequestHandler();
+    this.requestHandler = new RequestHandler(this.tokenManager);
   }
 
   private createRequestMethod(method: string) {
     return <T = unknown>(options: FetchOptions<T>) =>
-      this.requestHandler.execute<T>(
-        { method, ...options },
-        this.config,
-        this.tokenManager
-      );
+      this.requestHandler.execute<T>({ method, ...options }, this.config);
   }
 
   get = this.createRequestMethod("GET");

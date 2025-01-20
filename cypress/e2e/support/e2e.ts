@@ -7,8 +7,8 @@ import "./command";
 
 // Global settings to run before all tests
 before(() => {
-  // Example: Log in test user or perform other initial setup
-  cy.login("test1234@test.com", "123456");
+  // Supabase 로그인 대신 테스트 토큰 설정
+  Cypress.env("ACCESS_TOKEN", "test-token");
 });
 
 // Example: Globally handle errors to prevent Cypress from failing the test

@@ -7,7 +7,7 @@ import { RequestExecutor } from "./executor";
 export class RequestHandler {
   private executor: RequestExecutor;
 
-  constructor(private tokenManager: TokenManager) {
+  constructor(tokenManager: TokenManager) {
     this.executor = new RequestExecutor(tokenManager);
   }
 
@@ -45,4 +45,4 @@ export class RequestHandler {
       },
     });
   }
-} 
+}

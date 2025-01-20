@@ -9,8 +9,10 @@ export default defineConfig({
     setupNodeEvents(on, config) {
       // Node 이벤트 추가 가능
     },
+    baseUrl: "http://localhost:3000",
     supportFile: "cypress/e2e/support/e2e.ts",
-    watchForFileChanges: true,
+    specPattern: "cypress/e2e/**/*.cy.ts",
+    watchForFileChanges: false,
   },
   env: {
     SUPABASE_URL: process.env.SUPABASE_URL,
@@ -18,4 +20,5 @@ export default defineConfig({
     ACCESS_TOKEN: "",
     REFRESH_TOKEN: "",
   },
+  video: false,
 });
